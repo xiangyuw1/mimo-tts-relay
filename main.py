@@ -16,7 +16,7 @@ AUTH_USERNAME = os.getenv("TTS_AUTH_USERNAME", "")
 AUTH_PASSWORD = os.getenv("TTS_AUTH_PASSWORD", "")
 SESSION_SECRET = os.getenv("TTS_SESSION_SECRET", "")
 SESSION_COOKIE_NAME = "tts_session"
-VOICE_ALIASES = {
+V2_VOICE_ALIASES = {
     "en": "default_en",
     "english": "default_en",
     "default_en": "default_en",
@@ -27,6 +27,30 @@ VOICE_ALIASES = {
     "mimo_zh": "default_zh",
     "default": "mimo_default",
     "mimo_default": "mimo_default",
+}
+V2_VOICE_IDS = {"mimo_default", "default_zh", "default_en"}
+V2_5_VOICE_ALIASES = {
+    "en": "Mia",
+    "english": "Mia",
+    "default_en": "Mia",
+    "mimo_en": "Mia",
+    "zh": "冰糖",
+    "chinese": "冰糖",
+    "default_zh": "冰糖",
+    "mimo_zh": "冰糖",
+    "default": "mimo_default",
+    "mimo_default": "mimo_default",
+}
+V2_5_VOICE_IDS = {
+    "mimo_default",
+    "冰糖",
+    "茉莉",
+    "苏打",
+    "白桦",
+    "Mia",
+    "Chloe",
+    "Milo",
+    "Dean",
 }
 MODEL_V2_5 = "mimo-v2.5-tts"
 MODEL_V2 = "mimo-v2-tts"
@@ -113,10 +137,19 @@ def build_headers():
     return {"api-key": API_KEY, "Content-Type": "application/json"}
 
 
-def resolve_voice(lang: str) -> str:
-    if not lang:
+def resolve_voice(lang: str, model: str) -> str:
+    if not isinstance(lang, str) or not lang.strip():
         return "mimo_default"
-    return VOICE_ALIASES.get(lang.strip().lower(), "mimo_default")
+    raw_value = lang.strip()
+    if model == MODEL_V2_5:
+        if raw_value in V2_5_VOICE_IDS:
+            return raw_value
+        normalized = raw_value.lower()
+        return V2_5_VOICE_ALIASES.get(normalized, "mimo_default")
+    if raw_value in V2_VOICE_IDS:
+        return raw_value
+    normalized = raw_value.lower()
+    return V2_VOICE_ALIASES.get(normalized, "mimo_default")
 
 
 def normalize_lang(lang: str) -> str:
@@ -283,7 +316,7 @@ async def mimo_tts(request: Request):
         # 从请求参数获取语速。未传 speed 时，zh 默认“变快”，en 默认“Speed up”。
         lang = extract_lang(data)
         speed = resolve_speed(lang, data.get("speed", ""))
-        voice = resolve_voice(lang)
+        voice = resolve_voice(lang, model)
         model = resolve_model(data)
         
         payload = {

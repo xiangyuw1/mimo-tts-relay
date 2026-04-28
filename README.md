@@ -64,9 +64,9 @@ If auth is enabled in this relay, use login flow values below.
 
 Language and speed notes:
 
-- lang=zh uses Chinese voice default_zh.
-- lang=en uses English voice default_en.
-- no lang uses mimo_default.
+- lang=zh uses Chinese voice default_zh on v2, and 冰糖 on v2.5.
+- lang=en uses English voice default_en on v2, and Mia on v2.5.
+- no lang uses mimo_default (available on both models).
 - when speed is not provided: zh defaults to 变快, en defaults to Speed up.
 - you can override speed by passing speed in request params.
 - add `v2` (for example `&v2=1`) to use the legacy `mimo-v2-tts` model; otherwise `mimo-v2.5-tts` is used.
