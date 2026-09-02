@@ -17,19 +17,21 @@ AUTH_PASSWORD = os.getenv("TTS_AUTH_PASSWORD", "")
 SESSION_SECRET = os.getenv("TTS_SESSION_SECRET", "")
 SESSION_COOKIE_NAME = "tts_session"
 VOICE_ALIASES = {
-    "en": "default_en",
-    "english": "default_en",
-    "default_en": "default_en",
-    "mimo_en": "default_en",
-    "zh": "default_zh",
-    "chinese": "default_zh",
-    "default_zh": "default_zh",
-    "mimo_zh": "default_zh",
+    "en": "Mia",
+    "english": "Mia",
+    "default_en": "Mia",
+    "mimo_en": "Mia",
+    "zh": "冰糖",
+    "chinese": "冰糖",
+    "default_zh": "冰糖",
+    "mimo_zh": "冰糖",
     "default": "mimo_default",
     "mimo_default": "mimo_default",
 }
+# 官方预置音色列表（https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/audio/speech-synthesis-v2.5）
+PRESET_VOICES = {"mimo_default", "冰糖", "茉莉", "苏打", "白桦", "Mia", "Chloe", "Milo", "Dean"}
+PRESET_VOICE_LOOKUP = {name.lower(): name for name in PRESET_VOICES}
 MODEL_V2_5 = "mimo-v2.5-tts"
-MODEL_V2 = "mimo-v2-tts"
 DEFAULT_ZH_SPEED = "变快"
 DEFAULT_EN_SPEED = "Speed up"
 CHINESE_LANGS = {"zh", "chinese", "default_zh", "mimo_zh", "zh-cn", "zh-hans", "zh-hant"}
@@ -98,14 +100,11 @@ def unauthorized_response() -> Response:
     return response
 
 
-def build_messages(text: str, speed: str, model: str):
+def build_messages(text: str, speed: str):
     if not speed:
         styled_text = text
     else:
-        if model == MODEL_V2:
-            styled_text = f"<style>{speed}</style>{text}"
-        else:
-            styled_text = f"({speed}){text}"
+        styled_text = f"({speed}){text}"
 
     return [
         {"role": "user", "content": "请自然朗读下面这段文本。"},
@@ -119,24 +118,17 @@ def build_headers():
     return {"api-key": API_KEY, "Content-Type": "application/json"}
 
 
-def resolve_voice(lang: str, model: str) -> str:
+def resolve_voice(lang: str, voice: str) -> str:
+    # voice 参数直接指定预置音色（英文音色名不区分大小写），优先于 lang 映射
+    if isinstance(voice, str) and voice.strip():
+        voice_key = voice.strip()
+        if voice_key in PRESET_VOICES:
+            return voice_key
+        canonical = PRESET_VOICE_LOOKUP.get(voice_key.lower())
+        if canonical:
+            return canonical
     lang_key = lang.strip().lower() if lang else ""
-    if model == MODEL_V2:
-        return VOICE_ALIASES.get(lang_key, "mimo_default")
-    else:
-        v2_5_aliases = {
-            "en": "Mia",
-            "english": "Mia",
-            "default_en": "Mia",
-            "mimo_en": "Mia",
-            "zh": "冰糖",
-            "chinese": "冰糖",
-            "default_zh": "冰糖",
-            "mimo_zh": "冰糖",
-            "default": "mimo_default",
-            "mimo_default": "mimo_default",
-        }
-        return v2_5_aliases.get(lang_key, "mimo_default")
+    return VOICE_ALIASES.get(lang_key, "mimo_default")
 
 
 def normalize_lang(lang: str) -> str:
@@ -168,40 +160,6 @@ def resolve_speed(lang: str, speed: str) -> str:
     if is_english_lang(lang):
         return DEFAULT_EN_SPEED
     return DEFAULT_EN_SPEED
-
-
-def parse_flag(value) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"0", "false", "no", "off"}:
-            return False
-        return True
-    return True
-
-
-def resolve_model(data: dict) -> str:
-    # 优先解析 v=2 或 v=2.5
-    v_value = data.get("v")
-    if v_value is not None:
-        v_str = str(v_value).strip()
-        if v_str == "2":
-            return MODEL_V2
-        elif v_str == "2.5":
-            return MODEL_V2_5
-            
-    # 向下兼容旧的 v2 请求方式
-    v2_value = data.get("v2")
-    if v2_value is not None and parse_flag(v2_value):
-        return MODEL_V2
-        
-    # 默认返回 2.5
-    return MODEL_V2_5
 
 
 async def parse_request_payload(request: Request):
@@ -315,13 +273,12 @@ async def mimo_tts(request: Request):
         # 从请求参数获取语速。未传 speed 时，zh 默认“变快”，en 默认“Speed up”。
         lang = extract_lang(data)
         speed = resolve_speed(lang, data.get("speed", ""))
-        model = resolve_model(data)
-        voice = resolve_voice(lang, model)
-        
+        voice = resolve_voice(lang, data.get("voice", ""))
+
         payload = {
-            "model": model,
+            "model": MODEL_V2_5,
             # 参考官方文档：待合成文本应位于 assistant 角色消息中。
-            "messages": build_messages(text, speed, model),
+            "messages": build_messages(text, speed),
             "audio": {"voice": voice, "format": "wav"},
         }
 
